@@ -1,4 +1,5 @@
 import sys
+import collections
 
 from week3.crossword.crossword import *
 
@@ -149,21 +150,70 @@ class CrosswordCreator:
         Return True if arc consistency is enforced and no domains are empty;
         return False if one or more domains end up empty.
         """
-        raise NotImplementedError
+        if arcs is None:
+            queue = self.find_arcs()
+        else:
+            queue = arcs
+        queue = collections.deque(queue)        # Allows for faster pops and pop from left side (not stack behavior)
+
+        # AC-3 algo from week 3 slides
+        while len(queue) != 0:
+            (x, y) = queue.popleft()
+            if self.revise(x, y):
+                if len(self.domains[x]) == 0:
+                    return False                # A domain ended up empty, return false
+                for z in (self.crossword.neighbors(self, x) - y):
+                    queue.append((z, x))
+        return True
+
+    def find_arcs(self):
+        """
+        Finds and returns a list of all arcs (edges).
+        """
+        arcs = list()
+        for v1 in self.crossword.variables:
+            for v2 in self.crossword.neighbors(v1):
+                if (v2, v1) not in arcs:    #TODO: perhaps don't want this here? Not sure if (v1, v2) == (v2, v1) in our representation
+                    arcs.append((v1, v2))
+        return arcs
 
     def assignment_complete(self, assignment):
         """
         Return True if `assignment` is complete (i.e., assigns a value to each
         crossword variable); return False otherwise.
         """
-        raise NotImplementedError
+        for variable in self.crossword.variables:
+            if variable not in assignment or assignment[variable] is None:
+                return False
+        return True
 
     def consistent(self, assignment):
         """
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        raise NotImplementedError
+        # Condition 1: All values are distinct
+        values = set()
+        for value in assignment.values():
+            if value in values:
+                return False
+            values.add(value)
+
+        # Condition 2: Every value has a correct length
+        for variable, value in assignment.items():
+            if variable.length != len(value):
+                return False
+
+        # Condition 3: No conflicts b/w neighboring values
+        for var_x in assignment:
+            for var_y in assignment:
+                overlap = self.crossword.overlaps[var_x, var_y]
+                if overlap is not None:
+                    (x_spot, y_spot) = overlap
+                    if assignment[var_x][x_spot] != assignment[var_y][y_spot]:
+                        return False
+
+        return True
 
     def order_domain_values(self, var, assignment):
         """
