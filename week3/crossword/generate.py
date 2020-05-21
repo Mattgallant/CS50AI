@@ -127,10 +127,13 @@ class CrosswordCreator:
         # Find words in x domain that need to be removed
         remove_set = set()
         for xword in self.domains[x]:
+            remove = True  # Remove by default unless match
             for yword in self.domains[y]:
-                if xword[xspot] == yword[yspot]:
-                    break;
-            remove_set.add(xword)
+                if xword[xspot] == yword[yspot]:  # Found a match
+                    remove = False
+                    break
+            if remove:
+                remove_set.add(xword)
 
         # Remove words that are not arc consistent with variable y from x domain
         for word in remove_set:
@@ -154,15 +157,15 @@ class CrosswordCreator:
             queue = self.find_arcs()
         else:
             queue = arcs
-        queue = collections.deque(queue)        # Allows for faster pops and pop from left side (not stack behavior)
+        queue = collections.deque(queue)  # Allows for faster pops and pop from left side (not stack behavior)
 
         # AC-3 algo from week 3 slides
         while len(queue) != 0:
             (x, y) = queue.popleft()
             if self.revise(x, y):
                 if len(self.domains[x]) == 0:
-                    return False                # A domain ended up empty, return false
-                for z in (self.crossword.neighbors(self, x) - y):
+                    return False  # A domain ended up empty, return false
+                for z in (self.crossword.neighbors(x) - {y}):
                     queue.append((z, x))
         return True
 
@@ -173,7 +176,8 @@ class CrosswordCreator:
         arcs = list()
         for v1 in self.crossword.variables:
             for v2 in self.crossword.neighbors(v1):
-                if (v2, v1) not in arcs:    #TODO: perhaps don't want this here? Not sure if (v1, v2) == (v2, v1) in our representation
+                if (v2,
+                    v1) not in arcs:  # TODO: perhaps don't want this here? Not sure if (v1, v2) == (v2, v1) in our representation
                     arcs.append((v1, v2))
         return arcs
 
@@ -207,6 +211,7 @@ class CrosswordCreator:
         # Condition 3: No conflicts b/w neighboring values
         for var_x in assignment:
             for var_y in assignment:
+                if var_x is var_y: continue
                 overlap = self.crossword.overlaps[var_x, var_y]
                 if overlap is not None:
                     (x_spot, y_spot) = overlap
@@ -222,7 +227,19 @@ class CrosswordCreator:
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        raise NotImplementedError
+        ruleout_values = {}
+        for value in self.domains[var]:
+            n = 0
+            for neighbor in self.crossword.neighbors(var):
+                for neighbor_value in self.domains[neighbor]:
+                    # For every neighbor of var, check every word in their domain and count conflicts
+                    var_spot, neighbor_spot = self.crossword.overlaps[var, neighbor]
+                    if value[var_spot] != neighbor_value[neighbor_spot]:
+                        n += 1
+                ruleout_values[value] = n
+
+        ruleout_values = {k: v for k, v in sorted(ruleout_values.items(), key=lambda x: x[1])}
+        return ruleout_values.keys()
 
     def select_unassigned_variable(self, assignment):
         """
@@ -232,7 +249,32 @@ class CrosswordCreator:
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        raise NotImplementedError
+        unassigned = set(self.crossword.variables) - set(assignment.keys())
+
+        # Get set of variables with fewest remaining values in domain
+        min_length = len(self.crossword.words)  # Start with this b/c it is max any domain can be
+        min_set = set()
+        for variable in unassigned:
+            var_length = len(self.domains[variable])
+            if var_length == min_length:
+                min_set.add(variable)
+            elif var_length < min_length:
+                min_set.clear()
+                min_length = var_length
+                min_set.add(variable)
+
+        # Return variable with smallest domain OR w/ smallest domain and largest degree
+        if len(min_set) == 1:
+            return min_set.pop()
+        else:
+            most_neighbors = min_set.pop()
+            number_neighbors = len(self.crossword.neighbors(most_neighbors))
+            for variable in min_set:
+                neighbors = len(self.crossword.neighbors(variable))
+                if neighbors > number_neighbors:
+                    most_neighbors = variable
+                    number_neighbors = neighbors
+            return most_neighbors
 
     def backtrack(self, assignment):
         """
@@ -242,8 +284,20 @@ class CrosswordCreator:
         `assignment` is a mapping from variables (keys) to words (values).
 
         If no assignment is possible, return None.
+
+        Algorithm taken from CS50 week 3 slides.
         """
-        raise NotImplementedError
+        if self.assignment_complete(assignment):
+            return assignment
+        variable = self.select_unassigned_variable(assignment)
+        for value in self.order_domain_values(variable, assignment):  # Consider all values in var's domain
+            assignment[variable] = value
+            if self.consistent(assignment):
+                result = self.backtrack(assignment)
+                if result is not None:
+                    return result
+            del assignment[variable]  # This value didn't work, remove and retry.
+        return None
 
 
 def main():
