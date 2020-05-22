@@ -1,7 +1,8 @@
 import sys
 import collections
 
-from crossword import *
+from week3.crossword.crossword import *
+# from crossword import *
 
 
 class CrosswordCreator:

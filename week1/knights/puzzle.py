@@ -1,4 +1,5 @@
-from week1.knights.logic import *
+# from week1.knights.logic import *
+from logic import *
 
 AKnight = Symbol("A is a Knight")
 AKnave = Symbol("A is a Knave")

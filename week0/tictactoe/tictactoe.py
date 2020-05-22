@@ -68,8 +68,9 @@ def winner(board):
     """
     if utility(board) == 1:
         return X
-    else:
+    elif utility(board) == -1:
         return O
+    return None
 
 
 def terminal(board):
